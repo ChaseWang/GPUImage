@@ -1,6 +1,16 @@
 #import "GPUImageVideoCamera.h"
 #import "GPUImageMovieWriter.h"
+#import <mach/mach_time.h>
 #import "GPUImageFilter.h"
+#import "GPUImageColorConversion.h"
+
+//Optionally override the YUV to RGB matrices
+void setColorConversion601( GLfloat conversionMatrix[9] );
+void setColorConversion601FullRange( GLfloat conversionMatrix[9] );
+void setColorConversion709( GLfloat conversionMatrix[9] );
+
+//#import "../../../../CommonCore/commonCore/Tool/PKResManager/Additions/UIImage+PKImage.h"
+// Color Conversion Constants (YUV to RGB) including adjustment from 16-235/16-240 (video range)
 
 void setColorConversion601( GLfloat conversionMatrix[9] )
 {
@@ -228,6 +238,9 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     
     [_captureSession commitConfiguration];
     
+    motionManager = [CMMotionManager new];
+    motionManager.accelerometerUpdateInterval = .5;
+    
 	return self;
 }
 
@@ -243,14 +256,18 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     [audioOutput setSampleBufferDelegate:nil queue:dispatch_get_main_queue()];
     
     [self removeInputsAndOutputs];
-    
-// ARC forbids explicit message send of 'release'; since iOS 6 even for dispatch_release() calls: stripping it out in that case is required.
+
+    [self cameraDealloc];
+    // ARC forbids explicit message send of 'release'; since iOS 6 even for dispatch_release() calls: stripping it out in that case is required.
 #if !OS_OBJECT_USE_OBJC
     if (frameRenderingSemaphore != NULL)
     {
         dispatch_release(frameRenderingSemaphore);
     }
 #endif
+}
+
+- (void)cameraDealloc {
 }
 
 - (BOOL)addAudioInputsAndOutputs
@@ -342,6 +359,11 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
         startingCaptureTime = [NSDate date];
 		[_captureSession startRunning];
 	};
+
+    if (![motionManager isAccelerometerActive])
+    {
+        [motionManager startAccelerometerUpdates];
+    }
 }
 
 - (void)stopCameraCapture;
@@ -349,6 +371,11 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     if ([_captureSession isRunning])
     {
         [_captureSession stopRunning];
+    }
+
+    if ([motionManager isAccelerometerActive])
+    {
+        [motionManager stopAccelerometerUpdates];
     }
 }
 
@@ -606,7 +633,7 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     }
 }
 
-- (void)processVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer;
+- (void)processVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer Indx:(int)indxt;
 {
     if (capturePaused)
     {
@@ -617,6 +644,9 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     CVImageBufferRef cameraFrame = CMSampleBufferGetImageBuffer(sampleBuffer);
     int bufferWidth = (int) CVPixelBufferGetWidth(cameraFrame);
     int bufferHeight = (int) CVPixelBufferGetHeight(cameraFrame);
+    if (bufferWidth == 1280 && bufferWidth > bufferHeight) {
+        return;
+    }
     CFTypeRef colorAttachments = CVBufferGetAttachment(cameraFrame, kCVImageBufferYCbCrMatrixKey, NULL);
     if (colorAttachments != NULL)
     {
@@ -671,6 +701,7 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
             CVReturn err;
             // Y-plane
             glActiveTexture(GL_TEXTURE4);
+            
             if ([GPUImageContext deviceSupportsRedTextures])
             {
 //                err = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault, coreVideoTextureCache, cameraFrame, NULL, GL_TEXTURE_2D, GL_RED_EXT, bufferWidth, bufferHeight, GL_RED_EXT, GL_UNSIGNED_BYTE, 0, &luminanceTextureRef);
@@ -710,7 +741,8 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
             glBindTexture(GL_TEXTURE_2D, chrominanceTexture);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            
+
+            [self processStickerSampleBuffer:sampleBuffer Indx:indxt]; 
 //            if (!allTargetsWantMonochromeData)
 //            {
                 [self convertYUVToRGBOutput];
@@ -805,6 +837,10 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     }  
 }
 
+- (void)processStickerSampleBuffer:(CMSampleBufferRef)sampleBuffer Indx:(int)indxt {
+
+}
+
 - (void)processAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer;
 {
     [self.audioEncodingTarget processAudioBuffer:sampleBuffer]; 
@@ -864,7 +900,6 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     numberOfFramesCaptured = 0;
     totalFrameTimeDuringCapture = 0.0;
 }
-
 #pragma mark -
 #pragma mark AVCaptureVideoDataOutputSampleBufferDelegate
 
@@ -880,11 +915,12 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     }
     else
     {
+        [self videoCaptureOutput];
         if (dispatch_semaphore_wait(frameRenderingSemaphore, DISPATCH_TIME_NOW) != 0)
         {
             return;
         }
-        
+
         CFRetain(sampleBuffer);
         runAsynchronouslyOnVideoProcessingQueue(^{
             //Feature Detection Hook.
@@ -892,31 +928,36 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
             {
                 [self.delegate willOutputSampleBuffer:sampleBuffer];
             }
-            
-            [self processVideoSampleBuffer:sampleBuffer];
-            
+
+            if ([UIApplication sharedApplication].applicationState == UIApplicationStateActive) {
+                [self videoProcessing:sampleBuffer];
+            }
+
             CFRelease(sampleBuffer);
             dispatch_semaphore_signal(frameRenderingSemaphore);
         });
     }
 }
 
+- (void)videoCaptureOutput {}
+- (void)videoProcessing:(CMSampleBufferRef)sampleBuffer {}
+
 #pragma mark -
 #pragma mark Accessors
 
-- (void)setAudioEncodingTarget:(GPUImageMovieWriter *)newValue;
-{
-    if (newValue) {
-        /* Add audio inputs and outputs, if necessary */
-        addedAudioInputsDueToEncodingTarget |= [self addAudioInputsAndOutputs];
-    } else if (addedAudioInputsDueToEncodingTarget) {
-        /* Remove audio inputs and outputs, if they were added by previously setting the audio encoding target */
-        [self removeAudioInputsAndOutputs];
-        addedAudioInputsDueToEncodingTarget = NO;
-    }
-    
-    [super setAudioEncodingTarget:newValue];
-}
+//- (void)setAudioEncodingTarget:(GPUImageMovieWriter *)newValue;
+//{
+//    if (newValue) {
+//        /* Add audio inputs and outputs, if necessary */
+//        addedAudioInputsDueToEncodingTarget |= [self addAudioInputsAndOutputs];
+//    } else if (addedAudioInputsDueToEncodingTarget) {
+//        /* Remove audio inputs and outputs, if they were added by previously setting the audio encoding target */
+//        [self removeAudioInputsAndOutputs];
+//        addedAudioInputsDueToEncodingTarget = NO;
+//    }
+//    
+//    [super setAudioEncodingTarget:newValue];
+//}
 
 - (void)updateOrientationSendToTargets;
 {

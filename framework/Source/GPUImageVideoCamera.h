@@ -3,13 +3,7 @@
 #import <CoreMedia/CoreMedia.h>
 #import "GPUImageContext.h"
 #import "GPUImageOutput.h"
-#import "GPUImageColorConversion.h"
-
-//Optionally override the YUV to RGB matrices
-void setColorConversion601( GLfloat conversionMatrix[9] );
-void setColorConversion601FullRange( GLfloat conversionMatrix[9] );
-void setColorConversion709( GLfloat conversionMatrix[9] );
-
+#import <CoreMotion/CoreMotion.h>
 
 //Delegate Protocal for Face Detection.
 @protocol GPUImageVideoCameraDelegate <NSObject>
@@ -41,6 +35,7 @@ void setColorConversion709( GLfloat conversionMatrix[9] );
     GLuint luminanceTexture, chrominanceTexture;
 
     __unsafe_unretained id<GPUImageVideoCameraDelegate> _delegate;
+    CMMotionManager *motionManager;
 }
 
 /// Whether or not the underlying AVCaptureSession is running
@@ -123,7 +118,7 @@ void setColorConversion709( GLfloat conversionMatrix[9] );
 /** Process a video sample
  @param sampleBuffer Buffer to process
  */
-- (void)processVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer;
+- (void)processVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer Indx:(int)indxt;
 
 /** Process an audio sample
  @param sampleBuffer Buffer to process

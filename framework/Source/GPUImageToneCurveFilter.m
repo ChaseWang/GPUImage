@@ -197,6 +197,27 @@ NSString *const kGPUImageToneCurveFragmentShaderString = SHADER_STRING
     return self;
 }
 
+// This pulls in Adobe ACV curve files to specify the tone curve
+- (id)initWithACVData:(NSData *)data mixturePercent:(CGFloat)mixPercent{
+    if (!(self = [super initWithFragmentShaderFromString:kGPUImageToneCurveFragmentShaderString]))
+    {
+        return nil;
+    }
+    
+    toneCurveTextureUniform = [filterProgram uniformIndex:@"toneCurveTexture"];
+    
+    GPUImageACVFile *curve = [[GPUImageACVFile alloc] initWithACVFileData:data];
+    
+    [self setRgbCompositeControlPoints:curve.rgbCompositeCurvePoints];
+    [self setRedControlPoints:curve.redCurvePoints];
+    [self setGreenControlPoints:curve.greenCurvePoints];
+    [self setBlueControlPoints:curve.blueCurvePoints];
+    [self setFloat:mixPercent forUniformName:@"mixturePercent"];
+    curve = nil;
+    
+    return self;
+}
+
 - (id)initWithACV:(NSString*)curveFilename
 {
     return [self initWithACVURL:[[NSBundle mainBundle] URLForResource:curveFilename
@@ -206,7 +227,13 @@ NSString *const kGPUImageToneCurveFragmentShaderString = SHADER_STRING
 - (id)initWithACVURL:(NSURL*)curveFileURL
 {
     NSData* fileData = [NSData dataWithContentsOfURL:curveFileURL];
-    return [self initWithACVData:fileData];
+    return [self initWithACVData:fileData mixturePercent:1.0];
+}
+
+- (id)initWithACVURL:(NSURL*)curveFileURL mixturePercent:(CGFloat)mixPercent
+{
+    NSData* fileData = [NSData dataWithContentsOfURL:curveFileURL];
+    return [self initWithACVData:fileData mixturePercent:mixPercent];
 }
 
 - (void)setPointsWithACV:(NSString*)curveFilename

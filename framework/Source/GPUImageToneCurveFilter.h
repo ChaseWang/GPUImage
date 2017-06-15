@@ -26,5 +26,6 @@
 - (NSMutableArray *)splineCurve:(NSArray *)points;
 - (NSMutableArray *)secondDerivative:(NSArray *)cgPoints;
 - (void)updateToneCurveTexture;
-   
+
+- (id)initWithACVURL:(NSURL*)curveFileURL mixturePercent:(CGFloat)mixPercent;
 @end
