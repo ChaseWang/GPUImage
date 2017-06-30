@@ -118,7 +118,7 @@
 /** Process a video sample
  @param sampleBuffer Buffer to process
  */
-- (void)processVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer Indx:(int)indxt;
+- (void)processVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer;
 
 /** Process an audio sample
  @param sampleBuffer Buffer to process

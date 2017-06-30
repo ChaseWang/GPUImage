@@ -633,7 +633,7 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     }
 }
 
-- (void)processVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer Indx:(int)indxt;
+- (void)processVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer
 {
     if (capturePaused)
     {
@@ -742,7 +742,6 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-            [self processStickerSampleBuffer:sampleBuffer Indx:indxt]; 
 //            if (!allTargetsWantMonochromeData)
 //            {
                 [self convertYUVToRGBOutput];
@@ -837,10 +836,6 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     }  
 }
 
-- (void)processStickerSampleBuffer:(CMSampleBufferRef)sampleBuffer Indx:(int)indxt {
-
-}
-
 - (void)processAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer;
 {
     [self.audioEncodingTarget processAudioBuffer:sampleBuffer]; 
@@ -915,7 +910,6 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
     }
     else
     {
-        [self videoCaptureOutput];
         if (dispatch_semaphore_wait(frameRenderingSemaphore, DISPATCH_TIME_NOW) != 0)
         {
             return;
@@ -929,18 +923,13 @@ void setColorConversion709( GLfloat conversionMatrix[9] )
                 [self.delegate willOutputSampleBuffer:sampleBuffer];
             }
 
-            if ([UIApplication sharedApplication].applicationState == UIApplicationStateActive) {
-                [self videoProcessing:sampleBuffer];
-            }
+            [self processVideoSampleBuffer:sampleBuffer];
 
             CFRelease(sampleBuffer);
             dispatch_semaphore_signal(frameRenderingSemaphore);
         });
     }
 }
-
-- (void)videoCaptureOutput {}
-- (void)videoProcessing:(CMSampleBufferRef)sampleBuffer {}
 
 #pragma mark -
 #pragma mark Accessors
